@@ -1,0 +1,16 @@
+{
+  "name": "smart-prep-ai",
+  "version": "2.0.0",
+  "description": "Smart Study & Exam Prep - AI Powered PDF Tool",
+  "type": "module",
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel --prod"
+  },
+  "dependencies": {
+    "openai": "^4.47.1"
+  },
+  "engines": {
+    "node": "18.x"
+  }
+}
