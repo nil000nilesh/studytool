@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Prep AI</title>
+  <link rel="stylesheet" href="style.css">
+
+  <!-- PDF.js Library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
+  
+  <!-- Tesseract.js Library (OCR) -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
+  <!-- Firebase SDK (v9 Modular via CDN compat) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+</head>
+<body>
+
+<!-- =========== LOGIN SCREEN =========== -->
+<div id="loginScreen" class="login-screen">
+  <div class="login-card">
+    <div class="login-logo">🎓</div>
+    <h1>Smart Prep AI</h1>
+    <p>AI-Powered PDF Study & Exam Tool</p>
+    <button id="googleLoginBtn" class="google-btn">
+      <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" width="20">
+      Sign in with Google
+    </button>
+    <p class="login-footer">Bank of Baroda | Powered by Wisefox Solution</p>
+  </div>
+</div>
+
+<!-- =========== MAIN APP (hidden until login) =========== -->
+<div id="appShell" class="hidden">
+
+<!-- TOP NAVIGATION BAR -->
+<nav class="main-nav">
+  <div class="logo">🎓 Smart Prep AI</div>
+  <div class="nav-tabs">
+    <button class="nav-btn active" onclick="switchTab('study')">📖 Study Mode</button>
+    <button class="nav-btn" onclick="switchTab('quiz')">📝 Exam/Quiz Mode</button>
+  </div>
+  <div class="user-info">
+    <img id="userAvatar" src="" alt="User" class="avatar" width="30" height="30">
+    <span id="userName" class="user-name"></span>
+    <button id="adminSettingsBtn" class="btn-settings" style="display:none;" title="Admin Settings">⚙️ Settings</button>
+    <button id="logoutBtn" class="btn-logout">Sign Out</button>
+  </div>
+
+  <!-- Admin Settings Panel -->
+  <div id="adminPanel" class="admin-panel hidden">
+    <div class="admin-panel-header">
+      <span>⚙️ Admin Settings</span>
+      <button id="closeAdminPanel">✖</button>
+    </div>
+    <div class="admin-panel-body">
+      <label>OpenAI API Key</label>
+      <input id="apiKeyInput" type="password" placeholder="sk-..." class="api-key-input">
+      <small>Firebase Firestore mein save hogi. Vercel env var ki zaroorat nahi.</small>
+      <button id="saveApiKeyBtn" class="btn-primary" style="margin-top:12px;">💾 Save Key</button>
+      <p id="apiKeyStatus" style="margin-top:8px;font-size:13px;"></p>
+    </div>
+  </div>
+</nav>
+
+<div class="main-layout">
+
+  <!-- ================= STUDY MODE SECTION ================= -->
+  <div id="studySection" class="mode-section active-section">
+    <!-- LEFT PANEL: PDF VIEWER -->
+    <div class="panel-viewer" id="viewerPanel">
+      <div class="toolbar">
+        <div class="group">
+          <label for="pdfUpload" class="upload-btn" title="Upload PDF">📂 Open PDF</label>
+          <input type="file" id="pdfUpload" accept="application/pdf" class="hidden-input">
+        </div>
+        <div class="group zoom-controls">
+          <button id="zoomOutBtn">➖</button>
+          <span id="zoomLevel">Fit</span>
+          <button id="zoomInBtn">➕</button>
+          <button id="fitWidthBtn">↔ Fit</button>
+        </div>
+        <div class="group center-controls">
+          <button id="prevBtn">◀</button>
+          <span id="pageInfo">0 / 0</span>
+          <button id="nextBtn">▶</button>
+        </div>
+        <div class="group">
+          <button id="resetBtn" class="btn-danger" title="Delete All Data">🗑️ Reset</button>
+        </div>
+      </div>
+      <div class="canvas-container" id="canvasContainer">
+        <canvas id="pdfCanvas"></canvas>
+      </div>
+    </div>
+
+    <!-- RIGHT PANEL: AI ASSISTANT -->
+    <div class="panel-ai">
+      <div class="ai-header">
+        <div class="ai-title-group">
+          <h2>🤖 Smart Notes</h2>
+          <div id="ocrStatus" class="badge">Waiting...</div>
+        </div>
+        <select id="languageSelect" class="lang-dropdown" title="Select AI Output Language">
+          <option value="hindi" selected>🇮🇳 Hindi + English Terms</option>
+          <option value="english">🇬🇧 Pure English</option>
+        </select>
+      </div>
+
+      <div class="ai-content">
+        <div class="card">
+          <div class="card-header"><h3>📄 Page Summary</h3></div>
+          <div class="card-body scrollable-box" id="aiSummary">
+            <p class="placeholder-text">Upload PDF to start...</p>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h3>💡 Deep Explain</h3>
+            <button id="aiExplainBtn" class="btn-sm">Explain Page</button>
+          </div>
+          <div class="card-body scrollable-box" id="aiExplain">
+            <p class="placeholder-text">Concept clear karne ke liye button dabayein.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= QUIZ MODE SECTION ================= -->
+  <div id="quizSection" class="mode-section">
+    <div class="quiz-container">
+      <div class="quiz-sidebar">
+        <h3>🎯 Create Quiz</h3>
+        <p>Current Page: <span id="quizPageNum">1</span></p>
+        <div class="quiz-controls">
+          <button id="generateQuizBtn" class="btn-primary">✨ Generate MCQs (Current Page)</button>
+          <div class="divider">OR</div>
+          <button id="generateFullQuizBtn" class="btn-secondary" disabled>Full PDF Quiz (Coming Soon)</button>
+        </div>
+        <div class="score-board">
+          <h4>Score</h4>
+          <div class="score-circle"><span id="scoreValue">0</span>/5</div>
+        </div>
+      </div>
+
+      <div class="quiz-main">
+        <div id="quizLoading" style="display:none;">
+          <div class="loader"></div>
+          <p style="margin-top: 15px; color: #666;">AI is creating questions from your notes...</p>
+        </div>
+        <div id="quizContent" class="hidden">
+          <h2 id="questionText">Question goes here?</h2>
+          <div class="options-grid" id="optionsContainer"></div>
+          <div id="quizFeedback" class="feedback-box hidden"></div>
+          <button id="nextQuestionBtn" class="btn-primary hidden" style="margin-top: 20px;">Next Question ➡</button>
+        </div>
+        <div id="quizPlaceholder" class="placeholder-screen">
+          <div style="font-size: 50px;">📝</div>
+          <h2>Ready to test your knowledge?</h2>
+          <p>Click "Generate MCQs" to create a practice test.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end .main-layout -->
+
+<!-- CHAT WIDGET -->
+<div id="pdfChatIcon">💬</div>
+<div id="aiChatPanel">
+  <div class="chatHeader">
+    <span>Chat with Page</span>
+    <button id="closeChatBtn">✖</button>
+  </div>
+  <div id="chatMessages"></div>
+  <div class="chatInputBox">
+    <input id="chatInput" type="text" placeholder="Ask doubt...">
+    <button id="sendChatBtn">➤</button>
+  </div>
+</div>
+
+</div><!-- end #appShell -->
+
+<!-- Firebase Config — Apni config se replace karein -->
+<script>
+  // ✅ STEP: Firebase Console > Project Settings > Your Apps > SDK Setup mein se yahan paste karein
+  const firebaseConfig = {
+    apiKey: "AIzaSyAdXYtDe2vUCaLXbUn5qavEaho-QXaHn4g",
+    authDomain: "study-tool-d88bb.firebaseapp.com",
+    projectId: "study-tool-d88bb",
+    storageBucket: "study-tool-d88bb.firebasestorage.app",
+    messagingSenderId: "784257139190",
+    appId: "1:784257139190:web:be80344a1b08bf9603c7d7",
+    measurementId: "G-8X1D9QL40K"
+  };
+  firebase.initializeApp(firebaseConfig);
+</script>
+<script src="app.js"></script>
+<script>
+  function switchTab(tab) {
+    document.querySelectorAll('.mode-section').forEach(el => el.classList.remove('active-section'));
+    document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
+    if (tab === 'study') {
+      document.getElementById('studySection').classList.add('active-section');
+      document.querySelector('.nav-btn:nth-child(1)').classList.add('active');
+    } else {
+      document.getElementById('quizSection').classList.add('active-section');
+      document.querySelector('.nav-btn:nth-child(2)').classList.add('active');
+      if (typeof pageNum !== 'undefined') document.getElementById('quizPageNum').innerText = pageNum;
+    }
+  }
+</script>
+</body>
+</html>
